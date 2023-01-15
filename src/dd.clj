@@ -89,25 +89,42 @@
     :else
     (f dd1 dd2)))
 
-(defn bvar [var-index] (node var-index 0 1))
+;; utility functions for binary decision diagrams
 
-(defn dd-not [dd] (apply1 #(if (= % 0) 1 0) dd))
+(defn bvar [var-index] (node var-index false true))
+
+(defn dd-not [dd] (apply1 false? dd))
 
 (def not-bvar (comp dd-not bvar))
 
 (defn dd-and
+  ([] true)
   ([dd] dd)
-  ([dd1 dd2] (apply2 (fn [a b] (if (and (= a 1) (= b 1)) 1 0)) dd1 dd2))
+  ([dd1 dd2] (apply2 (fn [a b] (and a b)) dd1 dd2))
   ([dd1 dd2 & more] (dd-and dd1 (apply dd-and dd2 more))))
 
 (defn dd-or
+  ([] false)
   ([dd] dd)
-  ([dd1 dd2] (apply2 (fn [a b] (if (or (= a 1) (= b 1)) 1 0)) dd1 dd2))
+  ([dd1 dd2] (apply2 (fn [a b] (or a b)) dd1 dd2))
   ([dd1 dd2 & more] (dd-or dd1 (apply dd-or dd2 more))))
 
+(defmacro with-domains [domains & body]
+  `(binding [*domains* ~domains] ~@body))
+
+(defmacro with-binary [& body]
+  `(with-domains (constantly 2) ~@body))
+
 (comment
+  (with-binary
+    (let [x3-1 (node 2 1 0)
+          x3-2 (node 2 0 1)
+          x2-1 (node 1 0 1)
+          x2-2 (node 1 x3-1 x3-2)]
+      (node 0 x2-2 x2-1)))
+
   (def wiki-bdd
-    (binding [*domains* [2 2 2]]
+    (with-domains [2 2 2]
       (let [x3-1 (node 2 1 0)
             x3-2 (node 2 0 1)
             x2-1 (node 1 0 1)
