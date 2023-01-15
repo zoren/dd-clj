@@ -7,7 +7,7 @@
 
 (deftest eval-dd-test
   (with-domains [3]
-    (is (= \c (eval-dd [2] (node 0 \a \b \c)))) ;; vars dont have to be binary nor do we have only two terminals
+    (is (= \c (eval-dd (node 0 \a \b \c) 2))) ;; vars dont have to be binary nor do we have only two terminals
     )
   (let [wiki-bdd
         (with-binary
@@ -42,7 +42,7 @@
               (dd-and
                (bvar 1)
                (bvar 2))))))
-    (is (eval-dd [0 0 0 0] wiki-bdd)) ;; extra vars are given but they are ignored
+    (is (eval-dd wiki-bdd 0 0 0 0)) ;; extra vars are given but they are ignored
     (doseq [[input expected]
             [[[0 0 0] 1]
              [[0 0 1] 0]
@@ -52,7 +52,7 @@
              [[1 0 1] 0]
              [[1 1 0] 1]
              [[1 1 1] 1]]]
-      (is (= (= 1 expected) (eval-dd input wiki-bdd))))
+      (is (= (= 1 expected) (apply eval-dd wiki-bdd input))))
     (let [not-wiki-bdd (with-binary (dd-not wiki-bdd))]
       (doseq [[input expected]
               [[[0 0 0] 0]
@@ -63,4 +63,4 @@
                [[1 0 1] 1]
                [[1 1 0] 0]
                [[1 1 1] 0]]]
-        (is (= (= 1 expected) (eval-dd input not-wiki-bdd)))))))
+        (is (= (= 1 expected) (apply eval-dd not-wiki-bdd input)))))))

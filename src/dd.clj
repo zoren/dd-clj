@@ -26,11 +26,11 @@
     (first children)
     (Node. var-index (into [] children))))
 
-(defn eval-dd [env node]
+(defn eval-dd [node & env]
   (loop [node node]
     (if (node? node)
       (recur
-       (nth (:children node) (env (:var-index node))))
+       (nth (:children node) (nth env (:var-index node))))
       node)))
 
 (defn all-where
@@ -124,17 +124,17 @@
       (node 0 x2-2 x2-1)))
 
   (def wiki-bdd
-    (with-domains [2 2 2]
+    (with-binary
       (let [x3-1 (node 2 1 0)
             x3-2 (node 2 0 1)
             x2-1 (node 1 0 1)
             x2-2 (node 1 x3-1 x3-2)]
         (node 0 x2-2 x2-1))))
 
-  (eval-dd [0 0 2] wiki-bdd) ;; fails as var is out of range
-  (eval-dd [0 0] wiki-bdd) ;; fails as a variable is missing
-  (eval-dd [0 0 0 0] wiki-bdd) ;; extra vars are given but they are ignored
-  (eval-dd [2] (node 0 0 1 2)) ;; vars dont have to be binary nor do we have only two terminals
+  (eval-dd wiki-bdd 0 0 2) ;; fails as var is out of range
+  (eval-dd wiki-bdd 0 0) ;; fails as a variable is missing
+  (eval-dd wiki-bdd 0 0 0 0) ;; extra vars are given but they are ignored
+  (with-domains [3] (eval-dd (node 0 0 1 2) 2)) ;; vars dont have to be binary nor do we have only two terminals
 
   (def built-wiki-bdd
     (binding [*domains* [2 2 2]]
@@ -160,7 +160,7 @@
     (doseq [v0 [0 1]
             v1 [0 1]
             v2 [0 1]]
-      (println [v0 v1 v2] (eval-dd [v0 v1 v2] x1))))
+      (println [v0 v1 v2] (eval-dd x1 v0 v1 v2))))
 
   (def not-wiki-bdd
     (binding [*domains* [2 2 2]]
@@ -169,7 +169,7 @@
   (doseq [v0 [0 1]
           v1 [0 1]
           v2 [0 1]]
-    (println [v0 v1 v2] (eval-dd [v0 v1 v2] wiki-bdd) (eval-dd [v0 v1 v2] not-wiki-bdd)))
+    (println [v0 v1 v2] (eval-dd wiki-bdd v0 v1 v2) (eval-dd not-wiki-bdd v0 v1 v2)))
   (all-where
    1
    (binding [*domains* [2 3]]
