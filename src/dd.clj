@@ -1,5 +1,7 @@
 (ns dd
-  "a naive non-optimized implementation of decision diagrams")
+  "a naive non-optimized implementation of decision diagrams"
+  (:require
+   [clojure.string :as str]))
 
 (defrecord Node [var-index children])
 
@@ -122,3 +124,162 @@
 
 (defmacro with-binary [& body]
   `(with-domains (constantly 2) ~@body))
+
+(defn eval-boolean-exp [env outer-expression]
+  ((fn go [expression]
+     (if (symbol? expression)
+       (env expression)
+       (case (first expression)
+         :not
+         (not (go (second expression)))
+
+         :and
+         (apply (fn [& args]
+                  (reduce (fn [_ b]
+                            (if b b (reduced b))) true args))
+                (map go (rest expression)))
+
+         :or
+         (apply (fn [& args]
+                  (reduce (fn [_ b]
+                            (if b (reduced b) b)) false args))
+                (map go (rest expression)))
+
+         (throw (ex-info "unknown expression" {:expression expression})))))
+   outer-expression))
+
+(defn boolean-exp->bdd [vars-in-order outer-expression]
+  (let [var-order (into {} (map-indexed (fn [i v] [v i]) vars-in-order))]
+    (binding [*mem-nodes* (atom {})]
+      (with-binary
+        ((fn go [expression]
+           (if (symbol? expression)
+             (bvar (var-order expression))
+             (case (first expression)
+               :not
+               (dd-not (go (second expression)))
+
+               :and
+               (apply dd-and (map go (rest expression)))
+
+               :or
+               (apply dd-or (map go (rest expression)))
+
+               (throw (ex-info "unknown expression" {:expression expression})))))
+         outer-expression)))))
+
+(defn get-node-id [d]
+  (str "n" (System/identityHashCode d)))
+
+(defn build-graphviz [dd]
+  (let [nodes-atom (atom {})
+        edges-atom (atom #{})]
+    ((fn go [d]
+       (let [node-id (get-node-id d)]
+         (swap! nodes-atom assoc node-id d)
+         (doseq [[i child] (map-indexed vector (:children d))]
+           (swap! edges-atom conj
+                  {:from node-id
+                   :to (get-node-id child)
+                   :label (str i)})
+           (go child))))
+     dd)
+    {:nodes @nodes-atom
+     :edges @edges-atom}))
+
+(defn gen-dot [{:keys [nodes edges]}]
+  (str "digraph G {
+        ordering=\"out\";\n"
+       (str/join
+        (map
+         (fn [[node-id node]]
+           (if (node? node)
+             (str "  " node-id " [label=\"" (:var-index node) "\"];\n")
+             (str "  " node-id " [label=\"" node "\" shape=\"box\"];\n")))
+         nodes))
+       \newline
+       (str/join
+        (map
+         (fn [{:keys [from to label]}]
+           (if (= label "0")
+             (str "  " from " -> " to " [label=\"" label "\" style=\"dashed\"];\n")
+             (str "  " from " -> " to " [label=\"" label "\"];\n")))
+         (sort-by :label edges)))
+       \newline
+       (str/join
+        (for [[_ n] (group-by :var-index (vals nodes))]
+          (str "  { rank=same; " (clojure.string/join " " (map get-node-id n)) " };\n")))
+       "}"))
+
+(comment
+  (defn mk-exp [n]
+    (when (odd? n)
+      (throw (ex-info "n must be even" {:n n})))
+    (let [vars (for [i (range n)]
+                 (symbol (str "x" i)))]
+      (into [:or]
+            (map (fn [vs] (into [:and] vs))
+                 (partition 2 vars)))))
+  (eval-boolean-exp
+   '{x0 false x1 true x2 false x3 true}
+   (mk-exp 4))
+  (mk-exp 8)
+  (let [n 8
+        vars (for [i (range n)] (symbol (str "x" i)))
+        dd
+        (boolean-exp->bdd
+         vars
+         (mk-exp n))
+        var-order (into {} (map-indexed (fn [i v] [v i]) vars))]
+    (spit "test.dot" (gen-dot (build-graphviz dd)))
+    var-order)
+  *e
+  (defn build-envs [n]
+    (if (= n 0)
+      [[]]
+      (let [ss (build-envs (dec n))]
+        (concat (map #(into [0] %) ss) (map #(into [1] %) ss)))))
+  (let [n 3
+        exp (mk-exp n)
+        vars (for [i (range n)]
+               (symbol (str "x" i)))
+        dd
+        (boolean-exp->bdd
+         vars
+         exp)]
+    (doseq [env (build-envs n)]
+      (println
+       env
+       (eval-boolean-exp (into {} (map-indexed (fn [i v] [(symbol (str \x i)) (= 1 v)]) env)) exp)
+       (apply eval-dd dd env))))
+  (def g *1)
+  g
+  (println (gen-dot g))
+  (group-by :var-index (vals (:nodes g)))
+
+  (let [n 3
+        is (range n)
+        vars
+        (for [i is]
+          (symbol (str "x" i)))
+        bad-ordering
+        (for [i (concat (filter even? is) (filter odd? is))]
+          (symbol (str "x" i)))
+        dd
+        (boolean-exp->bdd
+         bad-ordering
+         (mk-exp n))]
+    (println bad-ordering)
+    (count (build-graphviz dd))
+    (spit "test_bad.dot" (gen-dot (build-graphviz dd))))
+
+  (def wiki-bdd
+    (with-binary
+      (let [x3-1 (node 2 true false)
+            x3-2 (node 2 false true)
+            x2-1 (node 1 false true)
+            x2-2 (node 1 x3-1 x3-2)]
+        (node 0 x2-2 x2-1))))
+  (spit "wiki.dot" (gen-dot (build-graphviz wiki-bdd)))
+  ;
+  )
