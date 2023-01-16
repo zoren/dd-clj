@@ -26,6 +26,9 @@
     (first children)
     (Node. var-index (into [] children))))
 
+(defmacro with-domains [domains & body]
+  `(binding [*domains* ~domains] ~@body))
+
 (defn eval-dd [node & env]
   (loop [node node]
     (if (node? node)
@@ -89,7 +92,7 @@
     :else
     (f dd1 dd2)))
 
-;; utility functions for binary decision diagrams
+;; utility definitions for binary decision diagrams
 
 (defn bvar [var-index] (node var-index false true))
 
@@ -109,73 +112,5 @@
   ([dd1 dd2] (apply2 (fn [a b] (or a b)) dd1 dd2))
   ([dd1 dd2 & more] (dd-or dd1 (apply dd-or dd2 more))))
 
-(defmacro with-domains [domains & body]
-  `(binding [*domains* ~domains] ~@body))
-
 (defmacro with-binary [& body]
   `(with-domains (constantly 2) ~@body))
-
-(comment
-  (with-binary
-    (let [x3-1 (node 2 1 0)
-          x3-2 (node 2 0 1)
-          x2-1 (node 1 0 1)
-          x2-2 (node 1 x3-1 x3-2)]
-      (node 0 x2-2 x2-1)))
-
-  (def wiki-bdd
-    (with-binary
-      (let [x3-1 (node 2 1 0)
-            x3-2 (node 2 0 1)
-            x2-1 (node 1 0 1)
-            x2-2 (node 1 x3-1 x3-2)]
-        (node 0 x2-2 x2-1))))
-
-  (eval-dd wiki-bdd 0 0 2) ;; fails as var is out of range
-  (eval-dd wiki-bdd 0 0) ;; fails as a variable is missing
-  (eval-dd wiki-bdd 0 0 0 0) ;; extra vars are given but they are ignored
-  (with-domains [3] (eval-dd (node 0 0 1 2) 2)) ;; vars dont have to be binary nor do we have only two terminals
-
-  (def built-wiki-bdd
-    (binding [*domains* [2 2 2]]
-      (dd-or
-       (dd-and
-        (not-bvar 0)
-        (not-bvar 1)
-        (not-bvar 2))
-
-       (dd-and
-        (bvar 0)
-        (bvar 1))
-
-       (dd-and
-        (bvar 1)
-        (bvar 2)))))
-
-  (let [x3-1 (node 2 1 0)
-        x3-2 (node 2 0 1)
-        x2-1 (node 1 0 1)
-        x2-2 (node 1 x3-1 x3-2)
-        x1 (node 0 x2-2 x2-1)]
-    (doseq [v0 [0 1]
-            v1 [0 1]
-            v2 [0 1]]
-      (println [v0 v1 v2] (eval-dd x1 v0 v1 v2))))
-
-  (def not-wiki-bdd
-    (binding [*domains* [2 2 2]]
-      (apply1 #(if (= % 0) 1 0) wiki-bdd)))
-
-  (doseq [v0 [0 1]
-          v1 [0 1]
-          v2 [0 1]]
-    (println [v0 v1 v2] (eval-dd wiki-bdd v0 v1 v2) (eval-dd not-wiki-bdd v0 v1 v2)))
-  (all-where
-   1
-   (binding [*domains* [2 3]]
-     (let [n (node 1 0 0 1)]
-       (node 0 n 1))))
-  (all-where 0 wiki-bdd)
-  (all-where 1 wiki-bdd)
-  ;
-  )

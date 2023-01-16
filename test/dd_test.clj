@@ -1,7 +1,7 @@
 (ns dd-test
   (:require
    [clojure.test :refer [deftest is]]
-   [dd :refer [node eval-dd all-where apply1 apply2
+   [dd :refer [node eval-dd all-where
                with-domains with-binary
                bvar not-bvar dd-not dd-or dd-and]]))
 
@@ -20,10 +20,10 @@
     (is (= [] (all-where true false)))
     (is (= [{2 1, 1 0, 0 0}
             {2 0, 1 1, 0 0}
-            {1 0, 0 1}] 
+            {1 0, 0 1}]
            (all-where false wiki-bdd)))
-    (is (= [{2 0, 1 0, 0 0} 
-            {2 1, 1 1, 0 0} 
+    (is (= [{2 0, 1 0, 0 0}
+            {2 1, 1 1, 0 0}
             {1 1, 0 1}]
            (all-where true wiki-bdd)))
 
@@ -42,6 +42,13 @@
               (dd-and
                (bvar 1)
                (bvar 2))))))
+    (is (thrown? Exception
+                 (eval-dd wiki-bdd 0 0 2) ;; fails as var is out of range
+                 ))
+    (is (thrown? Exception
+                 (eval-dd wiki-bdd 0 0) ;; fails as a variable is missing
+                 ))
+
     (is (eval-dd wiki-bdd 0 0 0 0)) ;; extra vars are given but they are ignored
     (doseq [[input expected]
             [[[0 0 0] 1]
