@@ -6,6 +6,7 @@
 (def node? (partial instance? Node))
 
 (def ^:dynamic *domains* nil)
+(def ^:dynamic *mem-nodes* nil)
 
 (defn node [var-index & children]
   (when (not (integer? var-index))
@@ -24,7 +25,14 @@
       (throw (ex-info "node children must have higher var-index than parent" {:child child}))))
   (if (apply = children)
     (first children)
-    (Node. var-index (into [] children))))
+    (if-some [mem-atom *mem-nodes*]
+      (let [k [var-index children]]
+        (if-some [mem-node (get @mem-atom k)]
+          mem-node
+          (let [node (Node. var-index (into [] children))]
+            (swap! mem-atom assoc k node)
+            node)))
+      (Node. var-index (into [] children)))))
 
 (defmacro with-domains [domains & body]
   `(binding [*domains* ~domains] ~@body))
